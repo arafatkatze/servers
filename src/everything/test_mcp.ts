@@ -44,13 +44,13 @@ async function main() {
         const client = await createClient()
 
         console.log('\n=== Testing Notion Reader tool ===')
-        const notion_response = await client.callTool({
+        const echo_response = await client.callTool({
             name: "echo",
             arguments: {
                 message: "hello world"
             }
         });
-        console.log('Notion Reader result:', JSON.stringify(notion_response, null, 2))
+        console.log('Echo result:', JSON.stringify(echo_response, null, 2))
 
         // Clean up
         await client.close()
