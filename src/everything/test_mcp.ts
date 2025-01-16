@@ -45,10 +45,9 @@ async function main() {
 
         console.log('\n=== Testing Notion Reader tool ===')
         const notion_response = await client.callTool({
-            name: "notionReader",
+            name: "echo",
             arguments: {
-                notionApiKey: "das",
-                type: "das"
+                message: "hello world"
             }
         });
         console.log('Notion Reader result:', JSON.stringify(notion_response, null, 2))
