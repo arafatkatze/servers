@@ -60,6 +60,16 @@ const EXAMPLE_COMPLETIONS = {
 
 const GetTinyImageSchema = z.object({});
 
+// Add to schema definitions after other schemas
+const BrownianModelSchema = z.object({
+  message: z.string().describe("Message to explain with Brownian model"),
+});
+
+// Add new schema after other schemas
+const NotionReaderSchema = z.object({
+  notionApiKey: z.string().describe("Notion API key from environment variables").optional(),
+});
+
 enum ToolName {
   ECHO = "echo",
   ADD = "add",
@@ -67,6 +77,8 @@ enum ToolName {
   PRINT_ENV = "printEnv",
   SAMPLE_LLM = "sampleLLM",
   GET_TINY_IMAGE = "getTinyImage",
+  BROWNIAN_MODEL = "brownianModel",
+  NOTION_READER = "notionReader",
 }
 
 enum PromptName {
@@ -329,6 +341,16 @@ export const createServer = () => {
         description: "Returns the MCP_TINY_IMAGE",
         inputSchema: zodToJsonSchema(GetTinyImageSchema) as ToolInput,
       },
+      {
+        name: ToolName.BROWNIAN_MODEL,
+        description: "Explains concepts using Brownian motion as an analogy",
+        inputSchema: zodToJsonSchema(BrownianModelSchema) as ToolInput,
+      },
+      {
+        name: ToolName.NOTION_READER,
+        description: "Reads and lists content from Notion databases",
+        inputSchema: zodToJsonSchema(NotionReaderSchema) as ToolInput,
+      },
     ];
 
     return { tools };
@@ -434,6 +456,117 @@ export const createServer = () => {
           },
         ],
       };
+    }
+
+    if (name === ToolName.BROWNIAN_MODEL) {
+      const validatedArgs = BrownianModelSchema.parse(args);
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Explaining "${validatedArgs.message}" using Brownian motion: Just as particles in Brownian motion move randomly due to collisions with molecules, ${validatedArgs.message} can be understood as a process of random interactions and movements. Now here's the fun word in all of this MAGICMAGICMAGIC`,
+          },
+        ],
+      };
+    }
+
+    if (name === ToolName.NOTION_READER) {
+      const validatedArgs = NotionReaderSchema.parse(args);
+      
+      try {
+        // Always use hardcoded API key, ignoring any provided key
+        const apiKey = "api_key";
+        const headers = {
+          'Authorization': `Bearer ${apiKey}`,
+          'Notion-Version': '2022-06-28',
+          'Content-Type': 'application/json',
+        };
+
+        // First search for databases
+        const searchResponse = await fetch('https://api.notion.com/v1/search', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            filter: { property: 'object', value: 'database' }
+          })
+        });
+
+        if (!searchResponse.ok) {
+          throw new Error(`Failed to search databases: ${searchResponse.statusText}`);
+        }
+
+        const databases = await searchResponse.json();
+        if (!databases.results?.length) {
+          return {
+            content: [{ type: "text", text: "No databases found." }],
+          };
+        }
+
+        const database = databases.results[0];
+        let output = `Database: ${database.title?.[0]?.plain_text || 'Untitled'}\n\n`;
+
+        // Query the database
+        const queryResponse = await fetch(`https://api.notion.com/v1/databases/${database.id}/query`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ page_size: 10 })
+        });
+
+        if (!queryResponse.ok) {
+          throw new Error(`Failed to query database: ${queryResponse.statusText}`);
+        }
+
+        const results = await queryResponse.json();
+        
+        // Process each page
+        for (const page of results.results || []) {
+          const titleProperty = page.properties?.Name || page.properties?.Title;
+          const title = titleProperty?.title?.[0]?.plain_text || 'Untitled';
+          
+          output += `====================================\n`;
+          output += `Page Title: ${title}\n`;
+          output += `Page ID: ${page.id}\n`;
+          output += `====================================\n`;
+
+          // Get page content
+          const contentResponse = await fetch(`https://api.notion.com/v1/blocks/${page.id}/children`, {
+            headers
+          });
+
+          if (!contentResponse.ok) {
+            output += `Failed to fetch page content: ${contentResponse.statusText}\n`;
+            continue;
+          }
+
+          const content = await contentResponse.json();
+          
+          for (const block of content.results || []) {
+            if (block.type === 'numbered_list_item') {
+              const text = block.numbered_list_item?.rich_text?.[0]?.plain_text;
+              if (text) output += `• ${text}\n`;
+            } else if (block.type === 'paragraph') {
+              const text = block.paragraph?.rich_text?.[0]?.plain_text;
+              if (text) output += `${text}\n`;
+            }
+          }
+          output += '\n';
+        }
+
+        return {
+          content: [{ type: "text", text: output }],
+        };
+
+      } catch (error) {
+        if (error instanceof Error) {
+          return {
+            content: [{ type: "text", text: `Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}` }],
+          };
+        } else {
+          return {
+            content: [{ type: "text", text: `Unknown error occurred` }],
+          };
+        }
+      }
     }
 
     throw new Error(`Unknown tool: ${name}`);
