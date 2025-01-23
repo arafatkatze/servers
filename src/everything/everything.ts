@@ -79,8 +79,7 @@ const ReadFileSchema = z.object({
 });
 
 // Add to schema definitions after other schemas
-const MacScreenshotSchema = z.object({
-});
+const MacScreenshotSchema = z.object({});
 
 // Add to schema definitions after other schemas
 const ScreenshotToBase64Schema = z.object({});
@@ -632,11 +631,51 @@ export const createServer = () => {
     if (name === ToolName.MAC_SCREENSHOT) {
       const validatedArgs = MacScreenshotSchema.parse(args);
       try {
-        // -i for interactive mode (user selects area)
-        // -o to show mouse cursor
-        await execAsync(`screencapture -io /Users/arafatkhan/Desktop/servers/src/everything/screenshot.png`);
+        let isScreenshotAccepted = false;
+        const screenshotPath = '/Users/arafatkhan/Desktop/servers/src/everything/screenshot.png';
         
-        // Read the screenshot file and convert to base64
+        while (!isScreenshotAccepted) {
+          // Show initial permission dialog with simpler positioning
+          const dialogCmd = `osascript -e '
+            tell application "System Events"
+              display dialog "Would you like to take a screenshot?" buttons {"Cancel", "Allow"} default button "Allow" with icon caution with title "Screenshot Permission"
+            end tell'`;
+          
+          const dialogResult = await execAsync(dialogCmd);
+          console.log("Dialog result:", dialogResult); // Add logging
+          
+          if (!dialogResult.stdout.includes("Allow")) {
+            return {
+              content: [{ type: "text", text: "Screenshot cancelled by user" }],
+            };
+          }
+
+          // Take the screenshot
+          await execAsync(`screencapture -io "${screenshotPath}"`);
+          
+          // Open the screenshot in Preview and bring it to the foreground
+          await execAsync(`open "${screenshotPath}" && osascript -e 'tell application "Preview" to activate'`);
+          
+          // Show confirmation dialog with simpler positioning
+          const confirmCmd = `osascript -e '
+            tell application "System Events"
+              display dialog "How does the screenshot look? (The screenshot is now open in Preview)" buttons {"Retake", "Accept"} default button "Accept" with icon note with title "Screenshot Confirmation"
+            end tell'`;
+          
+          const confirmResult = await execAsync(confirmCmd);
+          console.log("Confirm result:", confirmResult); // Add logging
+          
+          if (confirmResult.stdout.includes("Accept")) {
+            isScreenshotAccepted = true;
+            // Close Preview after accepting
+            await execAsync(`osascript -e 'tell application "Preview" to quit'`);
+          } else {
+            // Close Preview before retaking
+            await execAsync(`osascript -e 'tell application "Preview" to quit'`);
+          }
+        }
+        
+        // Return the final accepted screenshot
         return {
           content: [
             {
