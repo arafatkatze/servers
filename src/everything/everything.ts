@@ -83,6 +83,9 @@ const MacScreenshotSchema = z.object({
   outputPath: z.string().describe("Path where the screenshot should be saved").default("/tmp/screenshot.png"),
 });
 
+// Add to schema definitions after other schemas
+const ScreenshotToBase64Schema = z.object({});
+
 enum ToolName {
   ECHO = "echo",
   ADD = "add",
@@ -94,6 +97,7 @@ enum ToolName {
   NOTION_READER = "notionReader",
   READ_FILE = "readFile",
   MAC_SCREENSHOT = "macScreenshot",
+  SCREENSHOT_TO_BASE64 = "screenshotToBase64",
 }
 
 enum PromptName {
@@ -378,6 +382,11 @@ export const createServer = () => {
         description: "Takes an interactive screenshot using macOS screencapture (allows selection)",
         inputSchema: zodToJsonSchema(MacScreenshotSchema) as ToolInput,
       },
+      {
+        name: ToolName.SCREENSHOT_TO_BASE64,
+        description: "Takes an interactive screenshot and returns it as base64 without saving to disk",
+        inputSchema: zodToJsonSchema(ScreenshotToBase64Schema) as ToolInput,
+      },
     ];
 
     return { tools };
@@ -641,6 +650,49 @@ export const createServer = () => {
             {
               type: "image",
               data: base64Screenshot,
+              mimeType: "image/png",
+            },
+          ],
+        };
+      } catch (error) {
+        if (error instanceof Error) {
+          return {
+            content: [{ type: "text", text: `Error taking screenshot: ${error.message}` }],
+          };
+        }
+        return {
+          content: [{ type: "text", text: "An unknown error occurred while taking the screenshot" }],
+        };
+      }
+    }
+
+    if (name === ToolName.SCREENSHOT_TO_BASE64) {
+      try {
+        const tempPath = `/tmp/screenshot-${Date.now()}.png`;
+        
+        // Take screenshot to temp file
+        await execAsync(`screencapture -io "${tempPath}"`);
+        
+        // Read file and convert to base64
+        const screenshotBuffer = await fs.promises.readFile(tempPath);
+        const base64Data = screenshotBuffer.toString('base64');
+        
+        // Clean up temp file
+        // await fs.promises.unlink(tempPath);
+        
+        if (!base64Data) {
+          throw new Error("No screenshot data received");
+        }
+        
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Screenshot captured successfully",
+            },
+            {
+              type: "image",
+              data: base64Data,
               mimeType: "image/png",
             },
           ],

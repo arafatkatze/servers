@@ -43,23 +43,12 @@ async function main() {
     try {
         const client = await createClient()
 
-        console.log('\n=== Testing File Reader tool ===')
-        const file_response = await client.callTool({
-            name: "readFile",
-            arguments: {
-                filePath: "hello.png"  // Using package.json as an example since it should exist
-            }
+        console.log('\n=== Testing Screenshot to Base64 tool ===')
+        const base64_response = await client.callTool({
+            name: "screenshotToBase64",
+            arguments: {}
         });
-        console.log('File read result:', JSON.stringify(file_response, null, 2))
-
-        console.log('\n=== Testing Screenshot tool ===')
-        const screenshot_response = await client.callTool({
-            name: "macScreenshot",
-            arguments: {
-                outputPath: "test-screenshot.png"
-            }
-        });
-        console.log('Screenshot result:', JSON.stringify(screenshot_response, null, 2))
+        console.log('Screenshot to Base64 result:', JSON.stringify(base64_response, null, 2))
 
         // Clean up
         await client.close()
