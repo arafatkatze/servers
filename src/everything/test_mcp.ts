@@ -44,11 +44,15 @@ async function main() {
         const client = await createClient()
 
         console.log('\n=== Testing Screenshot to Base64 tool ===')
+        // list all the tools
+        const tools = await client.listTools()
+        console.log('Tools:', tools)
+
         const base64_response = await client.callTool({
-            name: "screenshotToBase64",
+            name: "macScreenshot",
             arguments: {}
         });
-        console.log('Screenshot to Base64 result:', JSON.stringify(base64_response, null, 2))
+        console.log('Screenshot to Base64 result:')
 
         // Clean up
         await client.close()

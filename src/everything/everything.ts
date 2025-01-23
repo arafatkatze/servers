@@ -80,7 +80,6 @@ const ReadFileSchema = z.object({
 
 // Add to schema definitions after other schemas
 const MacScreenshotSchema = z.object({
-  outputPath: z.string().describe("Path where the screenshot should be saved").default("/tmp/screenshot.png"),
 });
 
 // Add to schema definitions after other schemas
@@ -635,21 +634,18 @@ export const createServer = () => {
       try {
         // -i for interactive mode (user selects area)
         // -o to show mouse cursor
-        await execAsync(`screencapture -io "${validatedArgs.outputPath}"`);
+        await execAsync(`screencapture -io /Users/arafatkhan/Desktop/servers/src/everything/screenshot.png`);
         
         // Read the screenshot file and convert to base64
-        const screenshotBuffer = await fs.promises.readFile(validatedArgs.outputPath);
-        const base64Screenshot = screenshotBuffer.toString('base64');
-        
         return {
           content: [
             {
               type: "text",
-              text: `Screenshot saved to: ${validatedArgs.outputPath}`,
+              text: `Screenshot saved to: screenshot.png`,
             },
             {
               type: "image",
-              data: base64Screenshot,
+              data: "",
               mimeType: "image/png",
             },
           ],
