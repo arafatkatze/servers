@@ -19,6 +19,9 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import fs from 'fs';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
@@ -70,6 +73,16 @@ const NotionReaderSchema = z.object({
   notionApiKey: z.string().describe("Notion API key from environment variables").optional(),
 });
 
+// Add to schema definitions after other schemas
+const ReadFileSchema = z.object({
+  filePath: z.string().describe("Path to the file to read and convert to base64"),
+});
+
+// Add to schema definitions after other schemas
+const MacScreenshotSchema = z.object({
+  outputPath: z.string().describe("Path where the screenshot should be saved").default("/tmp/screenshot.png"),
+});
+
 enum ToolName {
   ECHO = "echo",
   ADD = "add",
@@ -79,12 +92,16 @@ enum ToolName {
   GET_TINY_IMAGE = "getTinyImage",
   BROWNIAN_MODEL = "brownianModel",
   NOTION_READER = "notionReader",
+  READ_FILE = "readFile",
+  MAC_SCREENSHOT = "macScreenshot",
 }
 
 enum PromptName {
   SIMPLE = "simple_prompt",
   COMPLEX = "complex_prompt",
 }
+
+const execAsync = promisify(exec);
 
 export const createServer = () => {
   const server = new Server(
@@ -351,6 +368,16 @@ export const createServer = () => {
         description: "Reads and lists content from Notion databases",
         inputSchema: zodToJsonSchema(NotionReaderSchema) as ToolInput,
       },
+      {
+        name: ToolName.READ_FILE,
+        description: "Reads a file from the given path and returns its base64 encoded content",
+        inputSchema: zodToJsonSchema(ReadFileSchema) as ToolInput,
+      },
+      {
+        name: ToolName.MAC_SCREENSHOT,
+        description: "Takes an interactive screenshot using macOS screencapture (allows selection)",
+        inputSchema: zodToJsonSchema(MacScreenshotSchema) as ToolInput,
+      },
     ];
 
     return { tools };
@@ -566,6 +593,67 @@ export const createServer = () => {
             content: [{ type: "text", text: `Unknown error occurred` }],
           };
         }
+      }
+    }
+
+    if (name === ToolName.READ_FILE) {
+      const validatedArgs = ReadFileSchema.parse(args);
+      try {
+        const fileContent = await fs.promises.readFile(validatedArgs.filePath);
+        const base64Content = fileContent.toString('base64');
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Base64 encoded content of ${validatedArgs.filePath}:\n${base64Content}`,
+            },
+          ],
+        };
+      } catch (error) {
+        if (error instanceof Error) {
+          return {
+            content: [{ type: "text", text: `Error reading file: ${error.message}` }],
+          };
+        }
+        return {
+          content: [{ type: "text", text: "An unknown error occurred while reading the file" }],
+        };
+      }
+    }
+
+    if (name === ToolName.MAC_SCREENSHOT) {
+      const validatedArgs = MacScreenshotSchema.parse(args);
+      try {
+        // -i for interactive mode (user selects area)
+        // -o to show mouse cursor
+        await execAsync(`screencapture -io "${validatedArgs.outputPath}"`);
+        
+        // Read the screenshot file and convert to base64
+        const screenshotBuffer = await fs.promises.readFile(validatedArgs.outputPath);
+        const base64Screenshot = screenshotBuffer.toString('base64');
+        
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Screenshot saved to: ${validatedArgs.outputPath}`,
+            },
+            {
+              type: "image",
+              data: base64Screenshot,
+              mimeType: "image/png",
+            },
+          ],
+        };
+      } catch (error) {
+        if (error instanceof Error) {
+          return {
+            content: [{ type: "text", text: `Error taking screenshot: ${error.message}` }],
+          };
+        }
+        return {
+          content: [{ type: "text", text: "An unknown error occurred while taking the screenshot" }],
+        };
       }
     }
 

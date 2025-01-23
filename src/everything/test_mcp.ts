@@ -43,14 +43,23 @@ async function main() {
     try {
         const client = await createClient()
 
-        console.log('\n=== Testing Notion Reader tool ===')
-        const echo_response = await client.callTool({
-            name: "echo",
+        console.log('\n=== Testing File Reader tool ===')
+        const file_response = await client.callTool({
+            name: "readFile",
             arguments: {
-                message: "hello world"
+                filePath: "hello.png"  // Using package.json as an example since it should exist
             }
         });
-        console.log('Echo result:', JSON.stringify(echo_response, null, 2))
+        console.log('File read result:', JSON.stringify(file_response, null, 2))
+
+        console.log('\n=== Testing Screenshot tool ===')
+        const screenshot_response = await client.callTool({
+            name: "macScreenshot",
+            arguments: {
+                outputPath: "test-screenshot.png"
+            }
+        });
+        console.log('Screenshot result:', JSON.stringify(screenshot_response, null, 2))
 
         // Clean up
         await client.close()
